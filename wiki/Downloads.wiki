@@ -3,4 +3,4 @@
 
 = Downloads: =
 
-  # [http://sourceforge.net/projects/zcahttpproxy/files/ZCAHTTPProxy.setup.1.2.3.0.zip/download ZCAHTTPProxy.setup.1.2.3.0.zip] - HTTP proxy with Interzet CA descrambler
+  # [http://sourceforge.net/projects/zcahttpproxy/files/latest/download ZCAHTTPProxy.setup.1.2.3.1.zip] - HTTP proxy with Interzet CA descrambler
