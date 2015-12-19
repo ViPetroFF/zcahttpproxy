@@ -1,0 +1,514 @@
+﻿<!DOCtype HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+	<head>
+		<title>M3U Tools</title>
+        <HTA:APPLICATION ID="oHTA"
+            APPLICATIONname="m3uTools"
+            VERSION="1.2.3.0"
+            NAVIGABLE="yes"
+        >
+        <OBJECT ID="oShell" CLASSID="clsid:13709620-C279-11CE-A49E-444553540000" ProgID="Shell.Application"></OBJECT>
+        <OBJECT ID="oWsShell" CLASSID="clsid:{72C24DD5-D70A-438B-8A42-98424B88AFB8}" ProgID="WScript.Shell"></OBJECT>
+        <OBJECT ID="oFSO" CLASSID="clsid:0D43FE01-F093-11CF-8940-00A0C9054228"  ProgID="Scripting.FileSystemObject"></OBJECT>
+        <OBJECT ID="oXMLHTTP" CLASSID="clsid:f6d90f16-9c73-11d3-b32e-00c04f990bb4" ProgID="Msxml2.XMLHTTP"></OBJECT>
+        <script LANGUAGE="VBScript">
+        <!--
+            Const ssfAPPDATA = &H1a
+            Const ssfPERSONAL = &H5
+            Const ssfINTERNETCACHE = &H20
+            Const ssfPROGRAMFILES = &H26
+            Const ssfPROGRAMFILESx86 = &H2a
+
+            Const AppDataFolder = "\m3uTools"
+
+            Function fnParsePathFilename(path)
+                parts = split(path, "\")
+                filename = parts(ubound(parts))
+                fnParsePathFilename = filename
+            End Function
+
+            Function fnParseUrlFilename(URL)
+                parts = split(URL, "/")
+                filename = parts(ubound(parts))
+                ndx = InStr(filename, "?")
+                if ndx > 0 then filename = Left(filename, ndx - 1)
+                fnParseUrlFilename = filename
+            End Function
+
+            Sub CfgURLSave(URL)
+                Set oFolder = oShell.nameSpace(ssfAPPDATA)
+                Set oFolderItem = oFolder.Items.Item                
+                appDataPath = oFolderItem.Path & AppDataFolder
+                Set oShortCut = oWsShell.CreateShortcut(appDataPath & "\m3u.url")
+                oShortCut.TargetPath = URL
+                oShortCut.Save()
+                Set oShortCut = Nothing
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing
+            End Sub
+
+            Function fnDownloadM3U(URL, saveTo, overwrite)
+                fnDownloadM3U = false
+                
+                rem oXMLHTTP.abort()
+                oXMLHTTP.open "GET", URL, false
+                oXMLHTTP.send()
+                If oXMLHTTP.Status = 200 Or oXMLHTTP.Status = 0 Then
+                    Set objADOStream = CreateObject("ADODB.Stream")
+                    objADOStream.Open
+                    objADOStream.type = 1
+                    objADOStream.Write oXMLHTTP.ResponseBody
+                    objADOStream.Position = 0
+
+                    SaveOption = 1
+                    DoOverWr = overwrite
+                    If Not DoOverwr Then DoOverwr = Not oFSO.FileExists(saveTo)
+                    If Not DoOverwr Then DoOverwr = (6 = MsgBox("File already exists, overwrite?", 4))
+                    If DoOverWr Then 
+                        SaveOption = 2
+                    End If
+                    On Error Resume Next
+                    Err.Clear
+                    objADOStream.SaveToFile saveTo, SaveOption
+                    If  Err.Number <> 0  Then
+                        alert("Warning: An error occured during save."  & vbCrLf & " (" & Err.Number & ") " & Err.Description)
+                        Err.Clear
+                    Else
+                        fnDownloadM3U = true
+                    End If
+                    On Error GoTo 0
+                    objADOStream.Close
+                    Set objADOStream = Nothing
+                Else
+                    rem alert(oXMLHTTP.Status)
+                    alert(oXMLHTTP.statusText)
+                End If
+            End Function
+
+            Function fnOnConvert2Html(FilePath)
+                Const ForReading = 1, ForWriting = 2, ForAppending = 8
+                Set fFrom = oFSO.OpenTextFile(FilePath, ForReading, False)
+                htmFile = Replace(FilePath, ".m3u", ".htm")
+                Set fTo = oFSO.OpenTextFile(htmFile, ForWriting, True)
+                
+                fTo.WriteLine "<!DOCTYPE HTML PUBLIC ""-//W3C//DTD HTML 4.0 Transitional//EN"">"
+                fTo.WriteLine "<html>"
+                fTo.WriteLine "<head><title>" & "The list of tv channels - " & fnParsePathFilename(FilePath) & "</title><meta charset=""UTF-8""></head>"
+                fTo.WriteLine "<body><ol>"
+                fFrom.SkipLine
+                Do While fFrom.AtEndOfStream <> True
+                    groupTitle = ""
+                    title = "untitled"
+                    retline = fFrom.ReadLine
+                    If "#EXTINF:" = Left(retline, 8) Then
+                        ndx = InStr(retline, "group-title=""")
+                        If ndx > 0 Then
+                            ndxx = InStr(ndx+13, retline, """")
+                            If ndxx > 0 Then groupTitle = Mid(retline, ndx+13, ndxx - ndx - 13)
+                        End If
+                    
+                        ndx = InStrRev(retline, ",")
+                        If ndx > 0 Then title = Mid(retline, ndx+1)
+                    End If
+                    source = ""
+                    If fFrom.AtEndOfStream <> True Then
+                        retline = fFrom.ReadLine
+                        If "http://" = Left(retline, 7) Then source = retline
+                    End If
+                    If Len(groupTitle) > 0 Then fTo.WriteLine("<h2>" & groupTitle & "</h2>")
+                    If Len(source) > 0 Then fTo.WriteLine("<li><a href=""" & source & """>" & title & "</a></li>")
+                Loop
+                fTo.WriteLine "</ol></body></html>"
+                fFrom.Close
+                fTo.Close
+                fnOnConvert2Html = htmFile
+            End Function
+
+            Function fnOnConvert2TableHtml(FilePath)
+                Const ForReading = 1, ForWriting = 2, ForAppending = 8
+                Set fFrom = oFSO.OpenTextFile(FilePath, ForReading, False)
+                htmFile = Replace(FilePath, ".m3u", ".htm")
+                Set fTo = oFSO.OpenTextFile(htmFile, ForWriting, True)
+                
+                fTo.WriteLine "<!DOCTYPE HTML PUBLIC ""-//W3C//DTD HTML 4.0 Transitional//EN"">"
+                fTo.WriteLine "<html>"
+                fTo.WriteLine "<head><title>" & "The table of tv channels - " & fnParsePathFilename(FilePath) & "</title><meta charset=""UTF-8""></head>"
+                fTo.WriteLine "<body><table><tr><td valign=""top"">"
+                fFrom.SkipLine
+                
+                bGroupsEnabled = false
+                nMaxTableHigh = CInt(document.getElementById("HtmlTbHigh").value)
+                nLineCount = 0
+                Do While fFrom.AtEndOfStream <> True
+                    groupTitle = ""
+                    title = "untitled"
+                    retline = fFrom.ReadLine
+                    If "#EXTINF:" = Left(retline, 8) Then
+                        ndx = InStr(retline, "group-title=""")
+                        If ndx > 0 Then
+                            ndxx = InStr(ndx+13, retline, """")
+                            If ndxx > 0 Then groupTitle = Mid(retline, ndx+13, ndxx - ndx - 13)
+                        End If
+                    
+                        ndx = InStrRev(retline, ",")
+                        If ndx > 0 Then title = Mid(retline, ndx+1)
+                    End If
+                    source = ""
+                    If fFrom.AtEndOfStream <> True Then
+                        retline = fFrom.ReadLine
+                        If "http://" = Left(retline, 7) Then source = retline
+                    End If
+                    If (bGroupsEnabled = false Or Len(groupTitle) > 0) And nLineCount > nMaxTableHigh Then
+                        fTo.WriteLine("</td><td valign=""top"">")
+                        nLineCount = 0
+                    End If
+                    If Len(groupTitle) > 0 Then
+                        fTo.WriteLine("<h2>" & groupTitle & "</h2>")
+                        If nLineCount = 0 Then bGroupsEnabled = true
+                        nLineCount = nLineCount + 4
+                    End If
+                    If Len(source) > 0 Then
+                        fTo.WriteLine("<li><a href=""" & source & """>" & title & "</a></li>")
+                        nLineCount = nLineCount + 1
+                    End If
+                Loop
+                fTo.WriteLine "</td></tr></table></body></html>"
+                fFrom.Close
+                fTo.Close
+                fnOnConvert2TableHtml = htmFile
+            End Function
+
+            Sub window_onload
+                window.resizeto 750, 380
+                Set oFolder = oShell.nameSpace(ssfPERSONAL)
+                Set oFolderItem = oFolder.Items.Item
+                document.getElementById("localpath").value = oFolderItem.Path
+                oWsShell.CurrentDirectory = oFolderItem.Path
+
+                Set oFolder = oShell.nameSpace(ssfAPPDATA)
+                Set oFolderItem = oFolder.Items.Item                
+                appDataPath = oFolderItem.Path & AppDataFolder
+                If oFSO.FolderExists(appDataPath) Then
+                    linkPath = appDataPath & "\m3u.lnk"
+                    If oFSO.FileExists(linkPath) Then
+                        Set oShortCut = oWsShell.CreateShortcut(linkPath)
+                        target = oShortCut.TargetPath
+                        Set oShortCut = Nothing
+                        fnOnSetM3UFilePath(target)
+                    End If
+                    linkPath = appDataPath & "\m3u.url"
+                    If oFSO.FileExists(linkPath) Then
+                        Set oShortCut = oWsShell.CreateShortcut(linkPath)
+                        document.getElementById("URLbox").value = oShortCut.TargetPath
+                    End If
+                    Set oShortCut = Nothing
+                    Set oFolderItem = Nothing
+                    Set oFolder = Nothing                                
+                Else
+                    oFSO.CreateFolder(appDataPath)                
+                End If
+
+                Set oFolderItem = nothing
+                Set oFolder = nothing
+                
+                UpdateVLCEnable("buttonOpenVLC")
+                UpdateWMPEnable("buttonOpenWMP")
+                UpdateMPCEnable("buttonOpenMPC")
+                UpdateMPC64Enable("buttonOpenMPC64")
+            End Sub
+
+            Function fnOnSetM3UFilePath(M3Upath)
+                document.title = "M3U Tools - " & M3Upath
+                document.getElementById("buttonConvert2Html").disabled = false
+                document.getElementById("buttonConvert2TableHtml").disabled = false
+                document.getElementById("buttonOpenIELocal").disabled = false
+                document.getElementById("buttonOpenShellLocal").disabled = false
+                UpdateVLCEnable("buttonOpenVLCLocal")
+                UpdateWMPEnable("buttonOpenWMPLocal")
+                UpdateMPCEnable("buttonOpenMPCLocal")
+                UpdateMPC64Enable("buttonOpenMPC64Local")
+                document.getElementById("m3uFilePath").value = M3Upath
+                
+                Set oFolder = oShell.nameSpace(ssfAPPDATA)
+                Set oFolderItem = oFolder.Items.Item
+                appDataPath = oFolderItem.Path & AppDataFolder
+                Set oShortCut = oWsShell.CreateShortcut(appDataPath & "\m3u.lnk")
+                If Not M3Upath = oShortCut.TargetPath Then
+                    oShortCut.TargetPath = M3Upath
+                    oShortCut.Save()
+                End If
+                Set oShortCut = Nothing
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing                
+            End Function
+            
+            Function fnOnGetFolderPath() 
+                Set oFolder = oShell.BrowseForFolder(0, "Choose a Folder", 0)
+                If Not oFolder Is Nothing Then
+                    Set oFolderItem = oFolder.Items.Item		 
+                    document.getElementById("localpath").value = oFolderItem.Path
+                    oWsShell.CurrentDirectory = oFolderItem.Path
+                    Set oFolderItem = Nothing
+                End If
+                
+                Set oFolder = Nothing
+            End Function
+
+            Function fnOnDownloadM3U(URL)
+                CurrPath = document.getElementById("localpath").value
+                saveTo = CurrPath & "\" & fnParseUrlFilename(URL)
+                rem MsgBox saveTo
+
+                If fnDownloadM3U(URL, saveTo, false) Then
+                    fnOnSetM3UFilePath(saveTo)
+                    MsgBox("Download completed.")
+                End If
+                
+                fnOnDownloadM3U = URL
+            End Function
+
+            Function fnOnOpenUrlM3U(URL)
+                open URL, "_blank"
+                fnOnOpenUrlM3U = URL
+            End Function
+
+            Function fnOnOpenFileM3U(URL)
+                oWsShell.Run """" & URL & """"
+                
+                fnOnOpenFileM3U = URL
+            End Function
+            
+            Const VLCAppPath = "\VideoLAN\VLC\vlc.exe"
+            
+            Function UpdateVLCEnable(id)
+                Set oFolder = oShell.nameSpace(ssfPROGRAMFILES)
+                Set oFolderItem = oFolder.Items.Item
+                UpdateVLCEnable = oFSO.FileExists(oFolderItem.Path & VLCAppPath)
+                document.getElementById(id).disabled = Not UpdateVLCEnable
+                Set oFolderItem = nothing
+                Set oFolder = nothing            
+            End Function
+            
+            Function fnOnOpenVLCM3U(URL)
+                Set oFolder = oShell.nameSpace(ssfPROGRAMFILES)
+                Set oFolderItem = oFolder.Items.Item
+                oShell.ShellExecute oFolderItem.Path & VLCAppPath, """" & URL & """"
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing
+                fnOnOpenVLCM3U = URL
+            End Function
+
+            Const WMPAppPath = "\Windows Media Player\wmplayer.exe"
+
+            Function UpdateWMPEnable(id)
+                Set oFolder = oShell.nameSpace(ssfPROGRAMFILES)
+                Set oFolderItem = oFolder.Items.Item
+                UpdateWMPEnable = oFSO.FileExists(oFolderItem.Path & WMPAppPath)
+                document.getElementById(id).disabled = Not UpdateWMPEnable
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing
+                UpdateWMPEnable = URL
+            End Function
+            
+            Function fnOnOpenWMPM3U(URL)
+                Set oFolder = oShell.nameSpace(ssfPROGRAMFILES)
+                Set oFolderItem = oFolder.Items.Item
+                oShell.ShellExecute oFolderItem.Path & WMPAppPath, """" & URL & """"
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing
+                fnOnOpenWMPM3U = URL
+            End Function
+            
+            Const MPCAppPath = "\MPC-HC\mpc-hc.exe"
+
+            Function UpdateMPCEnable(id)
+                Set oFolder = oShell.nameSpace(ssfPROGRAMFILES)
+                Set oFolderItem = oFolder.Items.Item
+                UpdateMPCEnable = oFSO.FileExists(oFolderItem.Path & MPCAppPath)
+                document.getElementById(id).disabled = Not UpdateMPCEnable
+                Set oFolderItem = nothing
+                set oFolder = nothing            
+            End Function
+
+            Function fnOnOpenMPCM3U(URL)
+                Set oFolder = oShell.nameSpace(ssfPROGRAMFILES)
+                Set oFolderItem = oFolder.Items.Item
+                oShell.ShellExecute oFolderItem.Path & MPCAppPath, """" & URL & """"
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing
+                fnOnOpenMPCM3U = URL
+            End Function
+
+            Function fnOnOpenUrlMPCM3U(URL)
+                Set oFolder = oShell.nameSpace(ssfINTERNETCACHE)
+                Set oFolderItem = oFolder.Items.Item                
+                saveTo = oFolderItem.Path & "\" & fnParseUrlFilename(URL)
+                If fnDownloadM3U(URL, saveTo, true) Then
+                    Set oFolder = oShell.nameSpace(ssfPROGRAMFILES)
+                    If Not oFolder Is Nothing Then
+                        Set oFolderItem = oFolder.Items.Item                                        
+                        oShell.ShellExecute oFolderItem.Path & MPCAppPath, """" & saveTo & """"
+                    End If
+                End If
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing
+                fnOnOpenUrlMPCM3U = URL
+            End Function
+
+            Const MPC64AppPath = "c:\Program Files\MPC-HC\mpc-hc64.exe"
+
+            Function UpdateMPC64Enable(id)
+                UpdateMPC64Enable = oFSO.FileExists(MPC64AppPath)
+                document.getElementById(id).disabled = Not UpdateMPC64Enable
+            End Function
+
+            Function fnOnOpenMPC64M3U(URL)
+                oShell.ShellExecute MPC64AppPath, """" & URL & """"
+                fnOnOpenMPC64M3U = URL
+            End Function
+
+            Function fnOnOpenUrlMPC64M3U(URL)
+                Set oFolder = oShell.nameSpace(ssfINTERNETCACHE)
+                Set oFolderItem = oFolder.Items.Item                
+                saveTo = oFolderItem.Path & "\" & fnParseUrlFilename(URL)
+                If fnDownloadM3U(URL, saveTo, true) Then
+                    oShell.ShellExecute MPC64AppPath, """" & saveTo & """"
+                End If
+                Set oFolderItem = Nothing
+                Set oFolder = Nothing
+                fnOnOpenUrlMPC64M3U = URL
+            End Function
+        -->
+        </script>
+    </head>
+	<body>
+        <form>
+           <label for="URLbox">M3U url:</label>
+           <input type="text" name="URLbox" id="URLbox" value="http://localhost:7781/iptv.m3u?format=tsid" size="70">
+           <input type="button" name="buttonDownload" id="buttonDownload" value="Download" onclick="CfgURLSave fnOnDownloadM3U(document.getElementById('URLbox').value)">
+           <br />
+           <input type="button" name="buttonOpenIE" id="buttonOpenIE" value="Open(IE)" onclick="CfgURLSave fnOnOpenUrlM3U(document.getElementById('URLbox').value)">
+           <input type="button" name="buttonOpenShell" id="buttonOpenShell" value="Open(Shell)" onclick="CfgURLSave fnOnOpenFileM3U(document.getElementById('URLbox').value)">
+           <input type="button" name="buttonOpenVLC" id="buttonOpenVLC" value="Open(VLC)" onclick="CfgURLSave fnOnOpenVLCM3U(document.getElementById('URLbox').value)">
+           <input type="button" name="buttonOpenWMP" id="buttonOpenWMP" value="Open(WMP)" onclick="CfgURLSave fnOnOpenWMPM3U(document.getElementById('URLbox').value)">
+           <input type="button" name="buttonOpenMPC" id="buttonOpenMPC" value="Open(MPC)" onclick="CfgURLSave fnOnOpenUrlMPCM3U(document.getElementById('URLbox').value)">
+           <input type="button" name="buttonOpenMPC64" id="buttonOpenMPC64" value="Open(MPC64)" onclick="CfgURLSave fnOnOpenUrlMPC64M3U(document.getElementById('URLbox').value)">
+           <br /><br />
+           <label for="m3u">M3U file:</label>
+           <input type="File" name="m3uFile" ID="m3uFile" accept="audio/x-mpegurl" size="70" onchange="fnOnSetM3UFilePath(me.value)">
+           <input type="hidden" name="m3uFilePath" id="m3uFilePath"> 
+           <br />
+           <input type="button" name="buttonOpenIE" id="buttonOpenIELocal" value="Open(IE)" disabled="disabled" onclick="fnOnOpenUrlM3U(document.getElementById('m3uFilePath').value)">
+           <input type="button" name="buttonOpenShell" id="buttonOpenShellLocal" value="Open(Shell)" disabled="disabled" onclick="fnOnOpenFileM3U(document.getElementById('m3uFilePath').value)">
+           <input type="button" name="buttonOpenVLC" id="buttonOpenVLCLocal" value="Open(VLC)" disabled="disabled" onclick="fnOnOpenVLCM3U(document.getElementById('m3uFilePath').value)">
+           <input type="button" name="buttonOpenWMP" id="buttonOpenWMPLocal" value="Open(WMP)" disabled="disabled" onclick="fnOnOpenWMPM3U(document.getElementById('m3uFilePath').value)">
+           <input type="button" name="buttonOpenMPC" id="buttonOpenMPCLocal" value="Open(MPC)" disabled="disabled" onclick="fnOnOpenMPCM3U(document.getElementById('m3uFilePath').value)">
+           <input type="button" name="buttonOpenMPC64" id="buttonOpenMPC64Local" value="Open(MPC64)" disabled="disabled" onclick="fnOnOpenMPC64M3U(document.getElementById('m3uFilePath').value)">
+           <br /><br />
+           <label for="localpath">Current directory:</label>
+           <input type="text" name="localpath" id="localpath" readonly="readonly" disabled="disabled" size="60">
+           <input type="button" name="buttonBrowseFolder" value="Browse" onclick="fnOnGetFolderPath()">
+           <br />
+           <input type="button" name="buttonConvert2Html" id="buttonConvert2Html" value="Convert to html list" disabled="disabled" onclick="fnOnOpenFileM3U(fnOnConvert2Html(document.getElementById('m3uFilePath').value))">
+           <input type="button" name="buttonConvert2TableHtml" id="buttonConvert2TableHtml" value="Convert to html table" disabled="disabled" onclick="fnOnOpenFileM3U(fnOnConvert2TableHtml(document.getElementById('m3uFilePath').value))">
+           <label for="HtmlTbHigh">Table high:</label>
+           <input type="text" name="HtmlTbHigh" id="HtmlTbHigh" value="30">
+        </form>	
+        <button onclick="window.close()">Quit</button>
+        <br /><br />
+        <a href="" name="help" id="help">Help</a>
+        <script FOR="help" EVENT="onClick" LANGUAGE="VBScript">
+        <!--
+            thisDocUrl = document.URL
+            Set doc = document.open()
+            doc.write("<script>window.resizeBy(0, 150);</script>")
+            doc.write("<table><tr><th colspan=""2"">Фильтры</th><th>Форматы</th></tr>")
+            doc.write("<tr><td valign=""top""><H4>group=@ | id</H4><ol>")
+            doc.write("<li>Эфирные</li>")
+            doc.write("<li>Бизнес, новости</li>")
+            doc.write("<li>Детям</li>")
+            doc.write("<li>Познание мира</li>")
+            doc.write("<li>Кино</li>")
+            doc.write("<li>Развлечения</li>")
+            doc.write("<li>Спорт</li>")
+            doc.write("<li>Музыка</li>")
+            doc.write("<li>Мир</li>")
+            doc.write("<li>Религиозный</li>")
+            doc.write("<li>HD каналы</li>")
+            doc.write("<li>Попс</li>")
+            doc.write("<li>Рейв</li>")
+            doc.write("<li>Диско</li>")
+            doc.write("<li>Релакс</li>")
+            doc.write("<li>Эротика</li></ol></td>")
+            doc.write("<td valign=""top""><H4>&#60;file name&#62;.m3u</H4><ul>")
+            doc.write("<li>&#60;any name&#62;</li>")
+            doc.write("<li>&#60;channel id number&#62;</li>")
+            doc.write("<li>@&#60;channel name&#62;</li>")
+            doc.write("<li>.&#60;ip number&#62;</li>")
+            doc.write("<li>$&#60;sequence number&#62;</li>")
+            doc.write("<li>^&#60;group number or name&#62;</li></ul>")	                
+            doc.write("<H4>name=</H4><ul>")
+            doc.write("<li>udp | ca | @</li>")
+            doc.write("<li>&#60;channel name&#62;</li></ul>")
+            doc.write("<H4>id=</H4><ul>")
+            doc.write("<li>. | $</li>")
+            doc.write("<li>&#60;channel id number&#62;</li></ul></td>")
+            doc.write("<td valign=""top""><H4>format=</H4><ul>")
+            doc.write("<li>std (стандартный, без расширенных параметров)</li>")
+            doc.write("<li>ts | tsid</li>")
+            doc.write("<li>lv2 (формат двойной вложенности)</li>")
+            doc.write("<li>lv2v1 | lv2v2 | lv2id | lv2v3 | lv2nd</li></ul>")
+            doc.write("<H4>m3uid=</H4><ul>")
+            doc.write("<li>id | epg | . | $</li>")
+            doc.write("<li>&#60;number&#62;</li></ul>")
+            doc.write("<H4>charset=ansi</H4>")
+            doc.write("<H4>proxy=no | ca</H4>")
+			doc.write("<H4>type=flat</H4></td></tr></table>")
+            doc.write("<a href=""" & thisDocUrl & """>Back</a>")
+            doc.close()
+            Set doc = Nothing
+        -->
+        </script>
+        <a href="" name="samples" id="A1">Samples</a>
+        <script FOR="samples" EVENT="onClick" LANGUAGE="VBScript">
+        <!--
+          thisDocUrl = document.URL
+          Set doc = document.open()
+          doc.write("<script>window.resizeBy(0, 320);</script>")
+          doc.write("<H3>Примеры запросов m3u списка.</H3><ul>")
+          doc.write("<li>Запрос по числовому идентификатору канала: ""http://&#60;hostname&#62;/&#60;number&#62;.m3u""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?id=&#60;number&#62;""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;number&#62;.ts"".</li>")
+          doc.write("<li>Запрос по значению четвёртого байта ip адреса: ""http://&#60;hostname&#62;/.&#60;number&#62;.m3u""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;number&#62;.m3u?id=.""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?id=.&#60;number&#62;"".</li>")
+          doc.write("<li>Запрос по порядковому номеру канала: ""http://&#60;hostname&#62;/$&#60;number&#62;.m3u""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;number&#62;.m3u?id=$""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;filename&#62;.m3u?id=$&#60;number&#62;"".</li>")
+          doc.write("<li>Запрос по имени канала: ""http://&#60;hostname&#62;/@&#60;name&#62;.m3u""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;name&#62;.m3u?name=@""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?name=&#60;name&#62;"".</li>")
+          doc.write("<li>Запрос по имени группы каналов или номеру: ""http://&#60;hostname&#62;/^&#60;groupname or groupnumber&#62;.m3u""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;groupname&#62;.m3u?group=@""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;groupnumber&#62;.m3u?group=id""")
+          doc.write(" или ""http://&#60;hostname&#62;/&#60;filename&#62;.m3u?group=&#60;groupname or groupnumber&#62;"".</li>")
+          doc.write("<li>Запрос только открытых каналов: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?name=udp"".</li>")
+          doc.write("<li>Запрос только шифрованных каналов: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?name=ca"".</li>")
+          doc.write("<li>Запрос всех каналов с прямыми адресами: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?proxy=no"".</li>")
+          doc.write("<li>Запрос всех каналов с прямыми адресами только у открытых: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?proxy=ca"".</li>")
+          doc.write("<li>Запрос только открытых каналов с прямыми адресами: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?name=udp&proxy=no"".</li>")
+          doc.write("<li>Запрос всех каналов в ansi кодировке: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?charset=ansi"".</li>")
+          doc.write("<li>Запрос плоского списка каналов: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?type=flat"".</li>")
+          doc.write("<li>Запрос списка каналов в формате адресов ts: ""http://&#60;hostname&#62;/&#60;anyname&#62;.m3u?format=ts"".</li>")
+          doc.write("<li>Запрос каналов в стандартном виде без расширенных параметров (совместим с медиа центром MediaPortal): ""http://&#60;hostname&#62;/&#60;filename&#62;.m3u?format=std"".</li>")
+          doc.write("<li>Запрос каналов в формате двойной вложенности (совместим с WMP): ""http://&#60;hostname&#62;/&#60;filename&#62;.m3u?format=lv2"".</li>")
+          doc.write("<li>Запрос каналов в формате для последующей конвертации в html список: ""http://&#60;hostname&#62;/&#60;filename&#62;.m3u?format=lv2id"".</li>")
+          doc.write("<li>Формат совместимый c DVBLink и XBMC: ""http://&#60;hostname&#62;/&#60;filename&#62;.m3u?m3uid=epg"".</li></ul>")
+          doc.write("<a href=""" & thisDocUrl & """>Back</a>")
+          doc.close()
+          Set doc = Nothing
+        -->
+        </script>
+        <p>Copyright (c) 2014 Viktor PetroFF</p>
+	</body>
+</html>

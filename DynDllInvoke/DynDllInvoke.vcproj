@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<VisualStudioProject
+	ProjectType="Visual C++"
+	Version="9,00"
+	Name="DynDllInvoke"
+	ProjectGUID="{737F3382-87B3-446C-A1C4-F34313DCC75C}"
+	Keyword="MakeFileProj"
+	TargetFrameworkVersion="196613"
+	>
+	<Platforms>
+		<Platform
+			Name="Win32"
+		/>
+	</Platforms>
+	<ToolFiles>
+	</ToolFiles>
+	<Configurations>
+		<Configuration
+			Name="Debug|Win32"
+			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)"
+			ConfigurationType="0"
+			>
+			<Tool
+				Name="VCNMakeTool"
+				BuildCommandLine="ml /c /coff /Cp /Fl /Sc /Sg Invoke.asm&#x0D;&#x0A;link Invoke.obj -DLL -entry:DllMain /machine:i386 /subsystem:windows /out:Invoke.dll /export:InvokeFunc,@1 /export:InvokePluginInit,@2&#x0D;&#x0A;copy /Y /B *.dll ..\bin\Debug\ /B"
+				ReBuildCommandLine=""
+				CleanCommandLine="erase /Q Invoke.obj&#x0D;&#x0A;erase /Q Invoke.dll&#x0D;&#x0A;erase /Q Invoke.lib&#x0D;&#x0A;erase /Q Invoke.exp&#x0D;&#x0A;erase /Q Invoke.lst&#x0D;&#x0A;"
+				Output="Invoke.dll"
+				PreprocessorDefinitions="WIN32;_DEBUG"
+				IncludeSearchPath=""
+				ForcedIncludes=""
+				AssemblySearchPath=""
+				ForcedUsingAssemblies=""
+				CompileAsManaged=""
+			/>
+		</Configuration>
+		<Configuration
+			Name="Release|Win32"
+			OutputDirectory="$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)"
+			ConfigurationType="0"
+			>
+			<Tool
+				Name="VCNMakeTool"
+				BuildCommandLine="ml /c /coff /Cp /Fl /Sc /Sg Invoke.asm&#x0D;&#x0A;link Invoke.obj -DLL -entry:DllMain /machine:i386 /subsystem:windows /out:Invoke.dll /export:InvokeFunc,@1 /export:InvokePluginInit,@2&#x0D;&#x0A;copy /Y /B *.dll ..\bin\Release\ /B"
+				ReBuildCommandLine=""
+				CleanCommandLine="erase /Q Invoke.obj&#x0D;&#x0A;erase /Q Invoke.dll&#x0D;&#x0A;erase /Q Invoke.lib&#x0D;&#x0A;erase /Q Invoke.exp&#x0D;&#x0A;erase /Q Invoke.lst&#x0D;&#x0A;"
+				Output="Invoke.dll"
+				PreprocessorDefinitions="WIN32;NDEBUG"
+				IncludeSearchPath=""
+				ForcedIncludes=""
+				AssemblySearchPath=""
+				ForcedUsingAssemblies=""
+				CompileAsManaged=""
+			/>
+		</Configuration>
+	</Configurations>
+	<References>
+	</References>
+	<Files>
+		<Filter
+			Name="Source Files"
+			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
+			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
+			>
+			<File
+				RelativePath=".\Invoke.asm"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="Header Files"
+			Filter="h;hpp;hxx;hm;inl;inc;xsd"
+			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
+			>
+		</Filter>
+		<Filter
+			Name="Resource Files"
+			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
+			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
+			>
+		</Filter>
+		<File
+			RelativePath=".\makefile"
+			>
+		</File>
+		<File
+			RelativePath=".\readme.txt"
+			>
+		</File>
+	</Files>
+	<Globals>
+	</Globals>
+</VisualStudioProject>
